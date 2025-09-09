@@ -8,7 +8,7 @@ import requests
 # --- CONFIG ---
 ROLE_ID = 1407474526685761586
 GAMEPASS_ID = 1454896770  # Your Game Pass ID
-GUILD_ID = None  # put your server ID here for faster slash command sync
+GUILD_ID = None  # ⚡ Put your server ID here for instant slash command sync
 
 # --- INTENTS ---
 intents = discord.Intents.default()
@@ -18,7 +18,7 @@ intents.members = True
 # --- BOT ---
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- HELPER FUNCTION ---
+# --- HELPER FUNCTIONS ---
 def owns_gamepass(user_id: int) -> bool:
     url = f"https://inventory.roblox.com/v1/users/{user_id}/items/GamePass/{GAMEPASS_ID}"
     response = requests.get(url)
@@ -42,14 +42,19 @@ async def on_ready():
         if GUILD_ID:
             guild = discord.Object(id=GUILD_ID)
             await bot.tree.sync(guild=guild)
+            print(f"✅ Synced commands to guild {GUILD_ID}")
         else:
             await bot.tree.sync()
-        print(f"✅ Logged in as {bot.user}")
+            print("✅ Synced global commands (may take up to 1 hour to appear)")
+        print(f"🤖 Bot is ready: {bot.user}")
     except Exception as e:
         print(f"Slash sync error: {e}")
 
-# --- COMMAND ---
-@bot.tree.command(name="usernameauth", description="Link your Roblox account with username.")
+# --- COMMANDS ---
+@bot.tree.command(
+    name="usernameauth",
+    description="Link your Roblox account with Baixo's Authenticator"
+)
 @app_commands.describe(username="Your Roblox username")
 async def usernameauth(interaction: discord.Interaction, username: str):
     await interaction.response.defer(thinking=True)
@@ -62,7 +67,7 @@ async def usernameauth(interaction: discord.Interaction, username: str):
 
     # Check ownership
     if not owns_gamepass(user_id):
-        await interaction.followup.send("❌ You don't own the Game Pass required.")
+        await interaction.followup.send("❌ You don't own the Baixo's Authenticator game pass.")
         return
 
     # Give role
@@ -74,7 +79,9 @@ async def usernameauth(interaction: discord.Interaction, username: str):
     try:
         await interaction.user.add_roles(role)
         code = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=6))
-        await interaction.followup.send(f"✅ Authenticated! Here is your code: **{code}**")
+        await interaction.followup.send(
+            f"✅ Authenticated as **{username}**!\nHere is your code: **{code}**"
+        )
     except discord.Forbidden:
         await interaction.followup.send("⚠️ I don't have permission to give roles.")
     except Exception as e:
