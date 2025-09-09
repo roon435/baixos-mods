@@ -12,12 +12,14 @@ GAMEPASS_ID = 1454896770  # Your Game Pass ID
 intents = discord.Intents.default()
 intents.guilds = True
 intents.members = True
+intents.message_content = True  # ✅ REQUIRED for ! commands
 
 # --- BOT ---
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # --- HELPER FUNCTIONS ---
 def owns_gamepass(user_id: int) -> bool:
+    """Check if a Roblox user owns your gamepass."""
     url = f"https://inventory.roblox.com/v1/users/{user_id}/items/GamePass/{GAMEPASS_ID}"
     response = requests.get(url)
     if response.status_code == 200:
@@ -26,6 +28,7 @@ def owns_gamepass(user_id: int) -> bool:
     return False
 
 def get_user_id(username: str) -> int:
+    """Convert a Roblox username to user ID."""
     url = f"https://api.roblox.com/users/get-by-username?username={username}"
     response = requests.get(url)
     if response.status_code == 200:
@@ -38,9 +41,15 @@ def get_user_id(username: str) -> int:
 async def on_ready():
     print(f"🤖 Bot is ready: {bot.user}")
 
-# --- COMMAND ---
+# --- COMMANDS ---
 @bot.command(name="authrblx")
-async def authrblx(ctx, username: str):
+async def authrblx(ctx, username: str = None):
+    print(f"📩 Command received from {ctx.author}: {ctx.message.content}")
+
+    if not username:
+        await ctx.send("⚠️ Usage: `!authrblx <YourRobloxName>`")
+        return
+
     await ctx.send(f"🔎 Checking Roblox account **{username}**...")
 
     # Get Roblox user ID
