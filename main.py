@@ -7,9 +7,9 @@ import string
 import os
 
 # ---------- CONFIG ----------
-TOKEN = os.getenv("DISCORD_TOKEN")  # Your Discord bot token
-GUILD_ID = 123456789012345678      # Replace with your server ID
-ROLE_ID = 1407474526685761586      # Verified role ID
+TOKEN = os.environ.get("DISCORD_TOKEN")  # Discord bot token
+GUILD_ID = 123456789012345678           # Replace with your Discord server ID
+ROLE_ID = 1407474526685761586           # Verified role ID
 # ----------------------------
 
 intents = discord.Intents.default()
@@ -21,7 +21,7 @@ temp_codes = {}   # temp_code -> Discord user ID
 final_codes = {}  # final_code -> Discord user ID
 
 # -----------------------------
-# Helper to generate codes
+# Helper to generate random codes
 # -----------------------------
 def generate_code(length=8):
     chars = string.ascii_uppercase + string.digits
@@ -46,9 +46,10 @@ def verify_code():
         return jsonify({"valid": False, "error": str(e)})
 
 def run_flask():
-    app.run(host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 8080))  # Railway provides $PORT
+    app.run(host="0.0.0.0", port=port, threaded=True)
 
-# Start Flask in separate thread
+# Start Flask in a separate thread
 threading.Thread(target=run_flask).start()
 
 # -----------------------------
@@ -89,12 +90,12 @@ async def rblxcode(ctx, code: str):
         await ctx.send("❌ Invalid or expired code.", delete_after=10)
 
 # -----------------------------
-# Temporary admin command to add final codes (simulate Roblox game)
+# !addfinalcode - admin only
 # -----------------------------
 @bot.command(name="addfinalcode")
 async def addfinalcode(ctx, code: str, user: int):
     final_codes[code] = user
     await ctx.send(f"Added final code `{code}` for user ID `{user}`.", delete_after=10)
 
-# Run the bot
+# Run the Discord bot
 bot.run(TOKEN)
