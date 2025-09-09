@@ -1,66 +1,84 @@
 import os
+import random
 import discord
 from discord.ext import commands
+from discord import app_commands
 import requests
-import random
-import string
 
-# Enable intents to assign roles
+# --- CONFIG ---
+ROLE_ID = 1407474526685761586
+GAMEPASS_ID = 1454896770  # Your Game Pass ID
+GUILD_ID = None  # put your server ID here for faster slash command sync
+
+# --- INTENTS ---
 intents = discord.Intents.default()
+intents.guilds = True
 intents.members = True
 
-bot = commands.Bot(command_prefix="/", intents=intents)
+# --- BOT ---
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Roblox Game Pass ID
-GAMEPASS_ID = 1454896770  # Your Game Pass
+# --- HELPER FUNCTION ---
+def owns_gamepass(user_id: int) -> bool:
+    url = f"https://inventory.roblox.com/v1/users/{user_id}/items/GamePass/{GAMEPASS_ID}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        return "data" in data and len(data["data"]) > 0
+    return False
 
-# Discord role ID (replace with your role ID in Discloud environment variable)
-ROLE_ID = int(os.environ.get("ROLE_ID"))
+def get_user_id(username: str) -> int:
+    url = f"https://api.roblox.com/users/get-by-username?username={username}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        return data.get("Id", 0)
+    return 0
 
-# Store linked users: discord_id -> {username, code}
-linked_users = {}
+# --- EVENTS ---
+@bot.event
+async def on_ready():
+    try:
+        if GUILD_ID:
+            guild = discord.Object(id=GUILD_ID)
+            await bot.tree.sync(guild=guild)
+        else:
+            await bot.tree.sync()
+        print(f"✅ Logged in as {bot.user}")
+    except Exception as e:
+        print(f"Slash sync error: {e}")
 
-# Function to generate random code
-def generate_random_code(length=8):
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+# --- COMMAND ---
+@bot.tree.command(name="usernameauth", description="Link your Roblox account with username.")
+@app_commands.describe(username="Your Roblox username")
+async def usernameauth(interaction: discord.Interaction, username: str):
+    await interaction.response.defer(thinking=True)
 
-# Function to check Game Pass ownership via Roblox API
-def check_gamepass(username: str):
-    # Get Roblox userId
-    response = requests.get(f"https://api.roblox.com/users/get-by-username?username={username}")
-    if response.status_code != 200:
-        return False, None
-    data = response.json()
-    if "Id" not in data or data["Id"] == 0:
-        return False, None
-    user_id = data["Id"]
+    # Get Roblox user ID
+    user_id = get_user_id(username)
+    if not user_id:
+        await interaction.followup.send("❌ Invalid Roblox username.")
+        return
 
-    # Check Game Pass ownership
-    gp_response = requests.get(f"https://apis.roblox.com/ownership/v1/users/{user_id}/assets/collectibles?assetIds={GAMEPASS_ID}")
-    if gp_response.status_code != 200:
-        return False, None
-    gp_data = gp_response.json()
-    if gp_data.get("data") and len(gp_data["data"]) > 0:
-        return True, user_id
-    return False, user_id
+    # Check ownership
+    if not owns_gamepass(user_id):
+        await interaction.followup.send("❌ You don't own the Game Pass required.")
+        return
 
-# Slash command for linking Roblox account
-@bot.slash_command(name="usernameauth", description="Link your Roblox account via Game Pass")
-async def usernameauth(ctx, username: str):
-    await ctx.defer()
-    owns, user_id = check_gamepass(username)
-    if owns:
-        code = generate_random_code()
-        linked_users[ctx.author.id] = {"username": username, "code": code}
-        
-        # Assign role
-        role = ctx.guild.get_role(ROLE_ID)
-        if role:
-            await ctx.author.add_roles(role)
-        
-        await ctx.respond(f"✅ {username} owns the Game Pass! You have been linked and given the role. Your code: `{code}`")
-    else:
-        await ctx.respond(f"❌ {username} does NOT own the Game Pass.")
+    # Give role
+    role = interaction.guild.get_role(ROLE_ID)
+    if not role:
+        await interaction.followup.send("⚠️ Role not found on this server.")
+        return
 
-# Run bot with token from environment variable
+    try:
+        await interaction.user.add_roles(role)
+        code = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=6))
+        await interaction.followup.send(f"✅ Authenticated! Here is your code: **{code}**")
+    except discord.Forbidden:
+        await interaction.followup.send("⚠️ I don't have permission to give roles.")
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ Error: {e}")
+
+# --- START BOT ---
 bot.run(os.environ["DISCORD_TOKEN"])
